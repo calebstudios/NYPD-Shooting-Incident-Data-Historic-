@@ -1,0 +1,175 @@
+---
+title: "NPYD Shootings"
+date: "2022-10-06"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(lubridate)
+```
+
+## NYPD Shootings
+
+Begin by reading in the data:
+
+```{r get_nypd_data}
+## Get currrent data
+url_in <- "https://data.cityofnewyork.us/api/views/833y-fsy8/rows.csv?accessType=DOWNLOAD"
+```
+
+## Importing in the Data
+
+Now we can read in the data and look at it:
+
+```{r import_data, echo=TRUE}
+library(tidyverse)
+crime_data <- read_csv(url_in)
+```
+
+## Tidying the Data
+
+```{r tidying_data, echo=TRUE}
+crime_data <- crime_data %>% 
+  select(-c(INCIDENT_KEY, PRECINCT, JURISDICTION_CODE, LOCATION_DESC, 
+            X_COORD_CD, Y_COORD_CD, Latitude, Longitude, Lon_Lat))
+
+crime <- crime_data %>% 
+  rename(date = 'OCCUR_DATE', 
+         time = 'OCCUR_TIME', 
+         borough = 'BORO', 
+         murder = 'STATISTICAL_MURDER_FLAG', 
+         perp_age = 'PERP_AGE_GROUP', 
+         perp_sex = 'PERP_SEX', 
+         perp_race = 'PERP_RACE', 
+         vic_age = 'VIC_AGE_GROUP', 
+         vic_sex = 'VIC_SEX', 
+         vic_race = 'VIC_RACE') %>% 
+  mutate(date = mdy(date), 
+         time = hms(time))
+```
+
+Taking a look at the data and a summary:
+
+```{r tidying_data_2, echo=TRUE}
+
+crime
+
+summary(crime)
+
+```
+
+Let's filter to where the data is greater than or equal to January 1st, 2020
+
+```{r tidying_data_4, echo=TRUE}
+
+crime <- crime %>% filter(date >= '2020-01-01')
+
+```
+
+## Transforming the Data
+
+We can observe from the summary that there are a fair number of categories with missing data. Let's calculate the precise amount of data that is missing for one of the dataset's features. The following code examines the percentage of missing data for a specific characteristic: 
+```{r transforming_data, echo=TRUE}
+
+mean(is.na(crime$perp_age))
+
+```
+
+We will see the total amount of values missing from the rows of data: 
+
+```{r transforming_data_2, echo=TRUE} 
+
+sum(is.na(crime))
+
+```
+
+Numerous variables lack several entries and some of them are missing more than fifty-percent of the data. There are a few approaches to handles this sort of predicament we are in where it is full of random data that is missing. Imputation is a technique whereby missing values are filled in using the values that are already there as a guide. This is helpful for lesser quantities of missing data, but it introduces too much bias when more than fifty-percent of the values for a feature are missing. Although there are still approaches to imputation for missing categorical data, it often works better for continuous values than for categorical ones. 
+
+With mode imputation, all missing values in a feature are given the most prevalent category. Nonetheless, much like with normal imputation, there is an increase in bias and a decrease in variance. If there had been fewer missing data, perpetrator sex might have been imputed using multinomial logistic regression as it can be utilized for features with few categories. On ordered categorical data, such as perpetrator age group, predictive mean matching imputation can be effective. However, because the percentage of missing data is excessive, we have to omit any observations that have data missing. 
+
+Given that the perpetrator is the subject of the majority of the severely missing data in this dataset, the answer relies on the significance of the analysis. If perp analysis is valued, then remove incomplete observations and maintain all the features; if not, remove those perp characteristics and keep all the observations. 
+
+Now, I am also interested in the correlations between the perputrator and victim's age, race, and sex. I will transform the related columns into factors: 
+
+```{r transforming_data_3, echo=TRUE} 
+
+crime <- crime %>% mutate(
+  perp_age = as.factor(perp_age), 
+  perp_race = as.factor(perp_race),
+  perp_sex = as.factor(perp_sex), 
+  vic_age = as.factor(vic_age), 
+  vic_race = as.factor(vic_race), 
+  vic_sex = as.factor(vic_sex)
+)
+
+crime_no_na <- crime %>% 
+  na.omit()
+
+crime_no_na
+
+summary(crime_no_na)
+
+```
+
+## Visualizing Data
+
+In order to preserve the bulk of the observations, I have opted to leave the characteristics that lacked sufficient data alone. Only a few observations required the dplyr function na.omit() since they were missing adequate variables. 
+
+We may observe an age breakdown for each of the five boroughs from 2020-2022 by factoring the number of gunshots by the victim's age. It is evident that the vast majority of gunshot victims in New York City are 25-44. 
+
+```{r visualizing_data, echo=TRUE}
+
+ggplot(crime_no_na) + 
+  geom_bar(aes(x = borough, fill = borough)) + 
+  facet_wrap(~vic_age) + 
+  theme(legend.position = "top", 
+        axis.text.x = element_text(angle = 90)) + 
+  labs(title = "Shootings in New York City by Age From 2020-2022", y = NULL)
+
+```
+
+In a similar vein, we may segment the shootings by borough for the racial characteristics of the victims, showing that the victims are likewise predominantly black: 
+
+```{r visualizing_data 2, echo=TRUE}
+
+ggplot(crime_no_na) + 
+  geom_bar(aes(x = borough, fill = borough)) + 
+  facet_wrap(~vic_race) + 
+  theme(legend.position = "top", 
+        axis.text.x = element_text(angle = 90)) + 
+  labs(title = "Shootings in New York City by Race From 2020-2022", y = NULL)
+
+```
+
+Finally, using data from a section of the dataset to train a linear regression model, I will use the model to determine if a homicide victim was killed based on the victim's ethnicity, sex, age, and the borough where the incident took place: 
+
+```{r modeling_data, echo = TRUE}
+
+train <- crime_no_na[1:410, ]
+test <- crime_no_na[411:488, ]
+
+model <- lm(murder ~ vic_age + vic_race + vic_sex + borough, data = train)
+model
+
+test$predict <- predict(model, test)
+test <- test %>% mutate(murder_binary = case_when(
+  murder == FALSE ~ 0, 
+  TRUE ~ 1
+))
+cor.test(test$murder_binary, test$predict)
+
+```
+
+About five-percent of the time, the model seems to have a respectable accuracy rate for forecasting the outcome. The model would never be accurate enough to forecast a victim dying even once, therefore the model would theoretically be more accurate if it just assumed that the victim lives every time. 
+
+## Conclusion
+
+Both of the representations appear to show that Staten Island is by far the least risky borough for gun violence, while Brooklyn is by far the most hazardous. Violence per capita statistics may have different findings since this simply considers the total number of recorded instances and ignores population density. 
+
+The reporting and recording of the data may have been biased. "Shooting" can be variously defined based on the individual precincts. For example, a gun being drawn at the victim could constitute a shooting in one precinct, but not in the other. The fact that not all shootings will be publicized is another instance of prejudice. Another example of bias data is victims of fatal gunshot wounds; victims of fatal gunshots will be reported at a higher rate than victims of non-lethal shootings.
+
+The skewed reported statistics would probably exceed the actual population parameter for the gunshot fatality rate if the rate of shooting deaths were analyzed. I would argue that there is very little personal bias because the data set was picked for me, thus I have no personal relationship to it. Having said that, my method of tidying and cleaning the data was biased. I opted to leave out several characteristics because there was so much missing information, even though I could have retained them and left out the observations that lacked data. As a result, the characteristics of the shooters' perpetrators were substantially obscured, which forced my study to concentrate more on the shooting victims.
