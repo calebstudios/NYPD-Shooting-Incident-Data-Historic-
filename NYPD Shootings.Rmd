@@ -26,7 +26,6 @@ url_in <- "https://data.cityofnewyork.us/api/views/833y-fsy8/rows.csv?accessType
 Now we can read in the data and look at it:
 
 ```{r import_data, echo=TRUE}
-library(tidyverse)
 crime_data <- read_csv(url_in)
 ```
 
@@ -49,7 +48,12 @@ crime <- crime_data %>%
          vic_sex = 'VIC_SEX', 
          vic_race = 'VIC_RACE') %>% 
   mutate(date = mdy(date), 
-         time = hms(time))
+         time = hms(time), 
+         year = year(date), 
+         month = month(date), 
+         day = day(date), 
+         hour = hour(time), 
+         minute = minute(time))
 ```
 
 Taking a look at the data and a summary:
@@ -66,7 +70,7 @@ Let's filter to where the data is greater than or equal to January 1st, 2020
 
 ```{r tidying_data_4, echo=TRUE}
 
-crime <- crime %>% filter(date >= '2020-01-01')
+crime <- crime %>% filter(date >= ymd('2020-01-01'))
 
 ```
 
