@@ -48,7 +48,17 @@ crime <- crime_data %>%
          month = month(date), 
          day = day(date), 
          hour = hour(time), 
-         minute = minute(time))
+         minute = minute(time), 
+         perp_age = as.factor(perp_age), 
+         perp_race = as.factor(perp_race),
+         perp_sex = as.factor(perp_sex), 
+         vic_age = as.factor(vic_age),
+         vic_race = as.factor(vic_race), 
+         vic_sex = as.factor(vic_sex)
+         ) %>% 
+  filter(date >= ymd('2020-01-01')) %>% 
+  na.omit()
+
 ```
 
 Taking a look at the data and a summary:
@@ -61,59 +71,6 @@ summary(crime)
 
 ```
 
-Let's filter to where the data is greater than or equal to January 1st, 2020
-
-```{r tidying_data_4, echo=TRUE}
-
-crime <- crime %>% filter(date >= ymd('2020-01-01'))
-
-```
-
-## Transforming the Data
-
-We can observe from the summary that there are a fair number of categories with missing data. Let's calculate the precise amount of data that is missing for one of the dataset's features. The following code examines the percentage of missing data for a specific characteristic: 
-```{r transforming_data, echo=TRUE}
-
-mean(is.na(crime$perp_age))
-
-```
-
-We will see the total amount of values missing from the rows of data: 
-
-```{r transforming_data_2, echo=TRUE} 
-
-sum(is.na(crime))
-
-```
-
-Numerous variables lack several entries and some of them are missing more than fifty-percent of the data. There are a few approaches to handles this sort of predicament we are in where it is full of random data that is missing. Imputation is a technique whereby missing values are filled in using the values that are already there as a guide. This is helpful for lesser quantities of missing data, but it introduces too much bias when more than fifty-percent of the values for a feature are missing. Although there are still approaches to imputation for missing categorical data, it often works better for continuous values than for categorical ones. 
-
-With mode imputation, all missing values in a feature are given the most prevalent category. Nonetheless, much like with normal imputation, there is an increase in bias and a decrease in variance. If there had been fewer missing data, perpetrator sex might have been imputed using multinomial logistic regression as it can be utilized for features with few categories. On ordered categorical data, such as perpetrator age group, predictive mean matching imputation can be effective. However, because the percentage of missing data is excessive, we have to omit any observations that have data missing. 
-
-Given that the perpetrator is the subject of the majority of the severely missing data in this dataset, the answer relies on the significance of the analysis. If perp analysis is valued, then remove incomplete observations and maintain all the features; if not, remove those perp characteristics and keep all the observations. 
-
-Now, I am also interested in the correlations between the perputrator and victim's age, race, and sex. I will transform the related columns into factors: 
-
-```{r transforming_data_3, echo=TRUE} 
-
-crime <- crime %>% mutate(
-  perp_age = as.factor(perp_age), 
-  perp_race = as.factor(perp_race),
-  perp_sex = as.factor(perp_sex), 
-  vic_age = as.factor(vic_age), 
-  vic_race = as.factor(vic_race), 
-  vic_sex = as.factor(vic_sex)
-)
-
-crime_no_na <- crime %>% 
-  na.omit()
-
-crime_no_na
-
-summary(crime_no_na)
-
-```
-
 ## Visualizing Data
 
 In order to preserve the bulk of the observations, I have opted to leave the characteristics that lacked sufficient data alone. Only a few observations required the dplyr function na.omit() since they were missing adequate variables. 
@@ -122,7 +79,7 @@ We may observe an age breakdown for each of the five boroughs from 2020-2022 by 
 
 ```{r visualizing_data, echo=TRUE}
 
-ggplot(crime_no_na) + 
+ggplot(crime) + 
   geom_bar(aes(x = borough, fill = borough)) + 
   facet_wrap(~vic_age) + 
   theme(legend.position = "top", 
@@ -135,7 +92,7 @@ In a similar vein, we may segment the shootings by borough for the racial charac
 
 ```{r visualizing_data 2, echo=TRUE}
 
-ggplot(crime_no_na) + 
+ggplot(crime) + 
   geom_bar(aes(x = borough, fill = borough)) + 
   facet_wrap(~vic_race) + 
   theme(legend.position = "top", 
@@ -148,17 +105,17 @@ Finally, using data from a section of the dataset to train a linear regression m
 
 ```{r modeling_data, echo = TRUE}
 
-train <- crime_no_na[1:410, ]
-test <- crime_no_na[411:488, ]
+train <- crime[1:410, ]
+test <- crime[411:488, ]
 
-model <- lm(murder ~ vic_age + vic_race + vic_sex + borough, data = train)
+model <- glm(murder ~ vic_age + vic_race + vic_sex + borough, data = train, 
+             family = "binomial")
 model
 
-test$predict <- predict(model, test)
-test <- test %>% mutate(murder_binary = case_when(
-  murder == FALSE ~ 0, 
-  TRUE ~ 1
-))
+test$predict <- predict(model, test, type = "response")
+test <- test %>% mutate(
+  murder_binary = as.numeric(murder)
+    )
 cor.test(test$murder_binary, test$predict)
 
 ```
