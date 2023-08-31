@@ -10,16 +10,11 @@ output:
 knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(lubridate)
-```
-
-## NYPD Shootings
-
-Begin by reading in the data:
-
-```{r get_nypd_data}
 ## Get currrent data
 url_in <- "https://data.cityofnewyork.us/api/views/833y-fsy8/rows.csv?accessType=DOWNLOAD"
 ```
+
+# NYPD Shootings
 
 ## Importing in the Data
 
